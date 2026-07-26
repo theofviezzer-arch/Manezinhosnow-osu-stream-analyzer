@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>osu! Stream Trainer & Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121214;
+            color: #e1e1e6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container { width: 100%; max-width: 850px; }
+        h1 { color: #ff66aa; text-align: center; margin-bottom: 5px; }
+        p.subtitle { text-align: center; color: #a8a8b3; margin-bottom: 20px; }
+        
+        .config-box {
+            background: #202024;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .config-group { display: flex; align-items: center; gap: 8px; }
+        .config-group input {
+            width: 45px;
+            height: 35px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+            background: #29292e;
+            border: 1px solid #ff66aa;
+            color: #fff;
+            border-radius: 6px;
+        }
+
+        .timer-buttons { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .btn {
+            background-color: #29292e;
+            color: white;
+            border: 2px solid #323238;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn:hover { border-color: #ff66aa; }
+        .btn.active { background-color: #ff66aa; border-color: #ff66aa; }
+        .btn-start { background-color: #00b37e; border-color: #00b37e; }
+        .btn-start:hover { background-color: #00875f; }
+
+        .tap-area {
+            background-color: #202024;
+            border: 2px dashed #ff66aa;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            user-select: none;
+            outline: none;
+            margin-bottom: 20px;
+        }
+        .timer-display { font-size: 32px; font-weight: bold; color: #ff66aa; margin-bottom: 10px; }
+
+        .keys-display { display: flex; justify-content: center; gap: 20px; }
+        .key-box {
+            width: 60px; height: 60px;
+            background: #29292e;
+            border: 2px solid #323238;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: bold; color: #a8a8b3;
+        }
+        .key-box.pressed { background: #ff66aa; color: #fff; transform: scale(0.95); }
+
+        .summary-card {
+            background-color: #202024;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 5px solid #ff66aa;
+        }
+        .summary-card h2 { margin-top: 0; color: #ff66aa; font-size: 20px; }
+        
+        .diagnostic-item {
+            background: #29292e;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
+        .chart-container { background-color: #202024; padding: 15px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>osu! Stream Trainer & Analyzer</h1>
+    <p class="subtitle">Configure suas teclas, escolha o tempo de teste e faça a stream para receber a análise.</p>
+
+    <!-- Configuração de Teclas e BPM Desejado -->
+    <div class="config-box">
+        <div class="config-group">
+            <label>Tecla 1:</label>
+            <input type="text" id="bindK1" maxlength="1" value="X">
+        </div>
+        <div class="config-group">
+            <label>Tecla 2:</label>
+            <input type="text" id="bindK2" maxlength="1" value="C">
+        </div>
+        <div class="config-group">
+            <label>Meta de BPM:</label>
+            <input type="number" id="targetBPM" value="180" style="width: 70px;">
+        </div>
+    </div>
+
+    <!-- Botões de Timer -->
+    <div class="timer-buttons">
+        <button class="btn timer-btn active" data-time="5">5 Segundos</button>
+        <button class="btn timer-btn" data-time="10">10 Segundos</button>
+        <button class="btn timer-btn" data-time="15">15 Segundos</button>
+        <button class="btn timer-btn" data-time="20">20 Segundos</button>
+        <button class="btn btn-start" id="startBtn">▶ COMEÇAR TESTE</button>
+    </div>
+
+    <!-- Área do Teste -->
+    <div class="tap-area" id="tapArea" tabindex="0">
+        <div class="timer-display" id="timerDisplay">PRONTO</div>
+        <p id="statusText">Clique em <strong>"COMEÇAR TESTE"</strong> para iniciar o cronômetro.</p>
+        <div class="keys-display">
+            <div class="key-box" id="boxK1">X</div>
+            <div class="key-box" id="boxK2">C</div>
+        </div>
+    </div>
+
+    <!-- Resultado Simplificado -->
+    <div class="summary-card" id="resultsBox" style="display: none;">
+        <h2>Resultado da sua Stream</h2>
+        
+        <div class="diagnostic-item" id="bpmResult">
+            <!-- Texto de Velocidade -->
+        </div>
+        <div class="diagnostic-item" id="balanceResult">
+            <!-- Texto de Equilíbrio de Dedos -->
+        </div>
+        <div class="diagnostic-item" id="consistencyResult">
+            <!-- Texto de Ritmo e Firmeza -->
+        </div>
+
+        <div class="chart-container">
+            <h3 style="margin-top:0; color: #a8a8b3; font-size: 14px;">Velocidade ao longo do Teste (O quão constante você foi)</h3>
+            <canvas id="simpleChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedTime = 5;
+    let isTestRunning = false;
+    let timerInterval = null;
+    let events = [];
+    let activeKeys = {};
+    let chartInstance = null;
+
+    const bindK1Input = document.getElementById('bindK1');
+    const bindK2Input = document.getElementById('bindK2');
+    const boxK1 = document.getElementById('boxK1');
+    const boxK2 = document.getElementById('boxK2');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const statusText = document.getElementById('statusText');
+    const tapArea = document.getElementById('tapArea');
+    const startBtn = document.getElementById('startBtn');
+
+    // Atualiza nomes das teclas nas caixas
+    function updateBinds() {
+        boxK1.innerText = bindK1Input.value.toUpperCase() || 'X';
+        boxK2.innerText = bindK2Input.value.toUpperCase() || 'C';
+    }
+    bindK1Input.addEventListener('input', updateBinds);
+    bindK2Input.addEventListener('input', updateBinds);
+
+    // Seleção dos botões de tempo
+    document.querySelectorAll('.timer-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedTime = parseInt(btn.getAttribute('data-time'));
+            timerDisplay.innerText = `${selectedTime}s`;
+        });
+    });
+
+    // Iniciar o Teste
+    startBtn.addEventListener('click', startTest);
+
+    function startTest() {
+        if (isTestRunning) return;
+
+        events = [];
+        isTestRunning = true;
+        let timeLeft = selectedTime;
+        
+        document.getElementById('resultsBox').style.display = 'none';
+        timerDisplay.innerText = `${timeLeft}s`;
+        statusText.innerHTML = "<span style='color:#00b37e; font-weight:bold;'>PODE CLICAR AGORA!</span>";
+        tapArea.focus();
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.innerText = `${timeLeft}s`;
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                finishTest();
+            }
+        }, 1000);
+    }
+
+    // Leitura das teclas
+    window.addEventListener('keydown', (e) => {
+        if (!isTestRunning) return;
+
+        const k1 = bindK1Input.value.toLowerCase();
+        const k2 = bindK2Input.value.toLowerCase();
+        const pressedKey = e.key.toLowerCase();
+
+        if ((pressedKey === k1 || pressedKey === k2) && !activeKeys[pressedKey]) {
+            activeKeys[pressedKey] = true;
+            const now = performance.now();
+            events.push({ key: pressedKey === k1 ? 'K1' : 'K2', time: now });
+
+            if (pressedKey === k1) boxK1.classList.add('pressed');
+            if (pressedKey === k2) boxK2.classList.add('pressed');
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        const k1 = bindK1Input.value.toLowerCase();
+        const k2 = bindK2Input.value.toLowerCase();
+        const releasedKey = e.key.toLowerCase();
+
+        if (releasedKey === k1 || releasedKey === k2) {
+            activeKeys[releasedKey] = false;
+            if (releasedKey === k1) boxK1.classList.remove('pressed');
+            if (releasedKey === k2) boxK2.classList.remove('pressed');
+        }
+    });
+
+    function finishTest() {
+        isTestRunning = false;
+        timerDisplay.innerText = "FIM!";
+        statusText.innerText = "Analisando seus resultados...";
+        analyzeResults();
+    }
+
+    function analyzeResults() {
+        if (events.length < 6) {
+            statusText.innerHTML = "<span style='color:#ff5555;'>Poucos cliques detectados. Tente novamente!</span>";
+            return;
+        }
+
+        const targetBPM = parseInt(document.getElementById('targetBPM').value) || 180;
+        const key1Name = bindK1Input.value.toUpperCase();
+        const key2Name = bindK2Input.value.toUpperCase();
+
+        let countK1 = 0, countK2 = 0;
+        let intervalsK1_K2 = [], intervalsK2_K1 = [];
+        let allIntervals = [];
+
+        events.forEach(e => {
+            if (e.key === 'K1') countK1++;
+            if (e.key === 'K2') countK2++;
+        });
+
+        for (let i = 1; i < events.length; i++) {
+            const delta = events[i].time - events[i-1].time;
+            if (delta < 250) { // Filtra apenas cliques rápidos de stream
+                allIntervals.push({ time: (events[i].time - events[0].time) / 1000, delta: delta });
+
+                if (events[i-1].key === 'K1' && events[i].key === 'K2') intervalsK1_K2.push(delta);
+                if (events[i-1].key === 'K2' && events[i].key === 'K1') intervalsK2_K1.push(delta);
+            }
+        }
+
+        // 1. Cálculo de BPM
+        const avgDelta = allIntervals.reduce((a, b) => a + b.delta, 0) / (allIntervals.length || 1);
+        const achievedBPM = Math.round((60000 / avgDelta) / 4);
+
+        let bpmHtml = `<strong>📊 Velocidade da Stream:</strong> Você alcançou <strong>${achievedBPM} BPM</strong>.<br>`;
+        if (achievedBPM < targetBPM - 5) {
+            bpmHtml += `<span style='color:#ffaa00;'>➔ Você precisa clicar <strong>MAIS RÁPIDO</strong> para manter ${targetBPM} BPM. (Faltam ~${targetBPM - achievedBPM} BPM).</span>`;
+        } else if (achievedBPM > targetBPM + 5) {
+            bpmHtml += `<span style='color:#ffaa00;'>➔ Você está clicando <strong>MAIS RÁPIDO</strong> do que a meta de ${targetBPM} BPM. Tente desacelerar um pouco.</span>`;
+        } else {
+            bpmHtml += `<span style='color:#00b37e;'>➔ Perfeito! Você manteve exatamente a meta de ${targetBPM} BPM.</span>`;
+        }
+        document.getElementById('bpmResult').innerHTML = bpmHtml;
+
+        // 2. Uso dos Dedos (Uso de cada Tecla)
+        const totalTouches = countK1 + countK2;
+        const pctK1 = Math.round((countK1 / totalTouches) * 100);
+        const pctK2 = Math.round((countK2 / totalTouches) * 100);
+
+        let balanceHtml = `<strong>🖐️ Equilíbrio das Teclas:</strong> Tecla <strong>${key1Name}</strong> (${pctK1}%) vs Tecla <strong>${key2Name}</strong> (${pctK2}%).<br>`;
+        if (Math.abs(pctK1 - pctK2) > 12) {
+            if (countK1 > countK2) {
+                balanceHtml += `<span style='color:#ff5555;'>➔ Você está clicando <strong>MAIS com a tecla ${key1Name}</strong>. O dedo da tecla ${key2Name} está "preguiçoso" ou falhando no duplo clique.</span>`;
+            } else {
+                balanceHtml += `<span style='color:#ff5555;'>➔ Você está clicando <strong>MAIS com a tecla ${key2Name}</strong>. O dedo da tecla ${key1Name} está ficando para trás.</span>`;
+            }
+        } else {
+            balanceHtml += `<span style='color:#00b37e;'>➔ Ótima alternância! Você usou os dois dedos de forma igual.</span>`;
+        }
+        document.getElementById('balanceResult').innerHTML = balanceHtml;
+
+        // 3. Ritmo / Inconsistência
+        const avgXC = intervalsK1_K2.reduce((a,b)=>a+b, 0) / (intervalsK1_K2.length || 1);
+        const avgCX = intervalsK2_K1.reduce((a,b)=>a+b, 0) / (intervalsK2_K1.length || 1);
+        const diffDeltas = Math.abs(avgXC - avgCX);
+
+        let consistencyHtml = `<strong>⏱️ Ritmo dos Dedos:</strong> `;
+        if (diffDeltas > 7) {
+            if (avgXC > avgCX) {
+                consistencyHtml += `<span style='color:#ffaa00;'>O dedo da tecla <strong>${key1Name}</strong> demorou mais tempo para erguer/descer (${avgXC.toFixed(1)}ms vs ${avgCX.toFixed(1)}ms). Ele trava o início da alternância.</span>`;
+            } else {
+                consistencyHtml += `<span style='color:#ffaa00;'>O dedo da tecla <strong>${key2Name}</strong> demorou mais tempo para erguer/descer (${avgCX.toFixed(1)}ms vs ${avgXC.toFixed(1)}ms). Ele trava o ritmo.</span>`;
+            }
+        } else {
+            consistencyHtml += `<span style='color:#00b37e;'>Os dois dedos têm o mesmo tempo de resposta. Ritmo simétrico!</span>`;
+        }
+        document.getElementById('consistencyResult').innerHTML = consistencyHtml;
+
+        document.getElementById('resultsBox').style.display = 'block';
+        renderSimpleChart(allIntervals, targetBPM);
+    }
+
+    function renderSimpleChart(allIntervals, targetBPM) {
+        const ctx = document.getElementById('simpleChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+
+        // Converte ms de intervalo em BPM direto para cada clique
+        const bpmData = allIntervals.map(i => ({
+            x: i.time.toFixed(1),
+            y: Math.round((60000 / i.delta) / 4)
+        }));
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Sua Velocidade (BPM)',
+                        data: bpmData,
+                        borderColor: '#ff66aa',
+                        backgroundColor: 'rgba(255, 102, 170, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        pointRadius: 3
+                    },
+                    {
+                        label: `Meta (${targetBPM} BPM)`,
+                        data: bpmData.map(p => ({ x: p.x, y: targetBPM })),
+                        borderColor: '#00b37e',
+                        borderDash: [5, 5],
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { title: { display: true, text: 'Segundos de Teste', color: '#a8a8b3' }, ticks: { color: '#a8a8b3' } },
+                    y: { title: { display: true, text: 'BPM Instantâneo', color: '#a8a8b3' }, ticks: { color: '#a8a8b3' }, min: 100, max: 280 }
+                },
+                plugins: { legend: { labels: { color: '#e1e1e6' } } }
+            }
+        });
+    }
+</script>
+</body>
+</html>
